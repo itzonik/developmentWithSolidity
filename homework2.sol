@@ -1,49 +1,58 @@
-pragma solidity ^0.4.19;
+pragma solidity ^0.4.18;
 
-contract Service {
+contract ServiceContract{
     address owner;
-    uint    lastBuy=0;
-    uint    lastWithdraw=0;
+    uint servicePrice;
+    uint withdrawLimit;
+    uint timeOfServiceBought;
+    uint hourofWithdraw;
     
-    //payable
-    function() public payable {
-            }
-    event confirmedPurchase (uint timestamp, uint change);
+     modifier onlyOwner {
+         require( owner == msg.sender);
+          _;    }
     
-    // owner check
-    modifier onlyOwner {
-        require(msg.sender == owner);
-        _;    }
+    modifier canBuyService {
+         require( now - timeOfServiceBought > 2 minutes);
+          _;    }
     
-    // Min amount for buy the service
-    modifier min1ETH {
-        require(this.balance >= 1 ether);
-        _;    }
+    modifier canWithdraw {
+         require( now/1 hours > hourofWithdraw);
+          _;    }
+    
+    event ServiceBought (uint  time, address indexed _addressSent);
+    
+    event AmountWithdrawn (uint indexed amount);
+    
+    function ServiceContract() public { 
+        owner               = msg.sender;
+        servicePrice        = 1 ether;
+        withdrawLimit       = 5 ether;
+        hourofWithdraw      = 0;
+        timeOfServiceBought = 0;    }
         
-    // Minutes should between Withdraws
-    modifier minMinsBetweenEvents(uint lastEvent, uint passedMinutess) {
-        require(now - lastEvent > passedMinutess*60);
-        _;    }
+    function buyService () public payable canBuyService {
+        uint balance = this.balance;
+        uint amount = msg.value;
+        if(amount >= servicePrice) {
+            // return to payable
+            ServiceBought(now,msg.sender);
+            timeOfServiceBought = now;
+            msg.sender.transfer(amount - servicePrice);
+            assert(balance + (servicePrice - amount) == this.balance);       } 
+		else {
+            //nothing to return
+            msg.sender.transfer(amount);
+            assert(balance - amount == this.balance);        }    }
     
-    // Constructor - set owner
-    function Service() public {
-        owner = msg.sender; }
-
-    // buy Service for 1 ETH and return rest of money
-    function buyService() public payable min1ETH minMinsBetweenEvents(lastBuy, 2) returns (uint bal) {
-        if (msg.value>1 ether)  {
-            bal = msg.value - 1 ether;
-            msg.sender.transfer(bal);
-            confirmedPurchase (now, bal); }
-        else 
-            confirmedPurchase (now, 0);    }
+    function withdrawFunds (uint withdrawAmount) public onlyOwner canWithdraw {
+        uint balance = this.balance;
+        uint amountWei = withdrawAmount*1 wei;
+        require(amountWei <= withdrawLimit);
+        owner.transfer(amountWei);
+        assert(balance - amountWei == this.balance);
+        hourofWithdraw = now/1 hours;
+        AmountWithdrawn(amountWei);    }
     
-    // Every withdraw from owner once per hour and max 5 ETH 
-    function withdrawToOwner() public onlyOwner minMinsBetweenEvents(lastWithdraw, 60) {
-        owner.transfer(this.balance % 5);    }
+    function () public payable{    }
     
-    // see balance
-    function getBalance() public view returns (uint) {
-        return this.balance;    }   
-            
 }
